@@ -1,7 +1,9 @@
 # <a name="title"></a> Kitchen::Vagrant
 
-[![Build Status](https://travis-ci.org/test-kitchen/kitchen-vagrant.png)](https://travis-ci.org/test-kitchen/kitchen-vagrant)
-[![Code Climate](https://codeclimate.com/github/test-kitchen/kitchen-vagrant.png)](https://codeclimate.com/github/test-kitchen/kitchen-vagrant)
+[![Gem Version](https://badge.fury.io/rb/kitchen-vagrant.svg)](http://badge.fury.io/rb/kitchen-vagrant)
+[![Build Status](https://secure.travis-ci.org/test-kitchen/kitchen-vagrant.svg?branch=master)](https://travis-ci.org/test-kitchen/kitchen-vagrant)
+[![Code Climate](https://codeclimate.com/github/test-kitchen/kitchen-vagrant.svg)](https://codeclimate.com/github/test-kitchen/kitchen-vagrant)
+[![Test Coverage](https://codeclimate.com/github/test-kitchen/kitchen-vagrant/coverage.svg)](https://codeclimate.com/github/test-kitchen/kitchen-vagrant)
 
 A Test Kitchen Driver for Vagrant.
 
@@ -73,22 +75,13 @@ This will effectively generate a configuration similar to:
 platforms:
 - name: ubuntu-10.04
   driver:
-    box: opscode-ubuntu-10.04
-    box_url: https://opscode-vm-bento.s3.amazonaws.com/vagrant/opscode_ubuntu-10.04_provisionerless.box
+    box: chef/ubuntu-10.04
 - name: ubuntu-12.04
   driver:
-    box: opscode-ubuntu-12.04
-    box_url: https://opscode-vm-bento.s3.amazonaws.com/vagrant/opscode_ubuntu-12.04_provisionerless.box
-- name: windows2012r2_cloud
-  driver:
-    box: windows2012r2_cloud
-    box_url: https://s3.amazonaws.com/box-cutter-us-east-1-cloudtrail/windows/virtualbox4.3.12/win2012r2-datacenter-chef11.12.8.box
-  transport:
-    name: winrm
+    box: chef/ubuntu-12.04
 - name: ubuntu-12.10
   driver:
-    box: opscode-ubuntu-12.10
-    box_url: ...
+    box: chef/ubuntu-12.10
 # ...
 ```
 
@@ -102,17 +95,45 @@ Many host wide defaults for Vagrant can be set using `$HOME/.vagrant.d/Vagrantfi
 details, please read the Vagrant [machine settings][vagrant_machine_settings]
 page.
 
+It is recommended to use a short name of a box on Vagrant Cloud and leave
+box_url empty if your box is publically available.
+
 The default will be computed from the platform name of the instance. For
 example, a platform called "fuzzypants-9.000" will produce a default `box`
-value of `"opscode-fuzzypants-9.000"`.
+value of `"chef/fuzzypants-9.000"`.
 
 ### <a name="config-box-url"></a> box\_url
 
-The URL that the configured box can be found at. If the box is not installed on
-the system, it will be retrieved from this URL when the virtual machine is
-started.
+The URL that the configured box can be found at if not available on the
+Vagrant Cloud or if on Vagrant < 1.5. If the box is not installed on the
+system, it will be retrieved from this URL when the virtual machine is started.
 
-The default will be computed from the platform name of the instance.
+### <a name="config-box-version"></a> box\_version
+
+The [version][vagrant_versioning] of the configured box.
+
+### <a name="config-box-check-update"></a> box\_check\_update
+
+Whether to check for box updates (enabled by default).
+
+### <a name="config-communicator"></a> communicator
+
+For supporting communicating with Windows over WinRM.
+
+For example:
+
+```ruby
+driver:
+  communicator: "winrm"
+```
+
+will generate a Vagrantfile configuration similar to:
+
+```ruby
+  config.vm.communicator = "winrm"
+```
+
+The default is nil assuming ssh will be used.
 
 ### <a name="config-provider"></a> provider
 
@@ -125,17 +146,6 @@ By default the value is unset, or `nil`. In this case the driver will use the
 Vagrant [default provider][vagrant_default_provider] which at this current time
 is `virtualbox` unless set by `VAGRANT_DEFAULT_PROVIDER` environment variable.
 
-### <a name="config-gui"></a> gui
-
-This is the vm console gui configuration and is used to make the console
-visible/hidden following a create action.
-
-If this value is `nil` or `false` then the console will be hidden, if `true`
-the console will be visble.
-
-This is particularly helpful for debugging Virtualbox Windows guests along with
-adding `clipboard: bidirectional` to the customize section.
-
 ### <a name="config-customize"></a> customize
 
 A **Hash** of customizations to a Vagrant virtual machine.  Each key/value
@@ -147,7 +157,6 @@ driver:
   customize:
     memory: 1024
     cpuexecutioncap: 50
-    clipboard: bidirectional
 ```
 
 will generate a Vagrantfile configuration similar to:
@@ -163,7 +172,35 @@ Vagrant.configure("2") do |config|
 end
 ```
 
-Please read the "Customizations" sections for [VirtualBox][vagrant_config_vbox] and [VMware][vagrant_config_vmware] for more details.
+Please read the "Customizations" sections for [VirtualBox][vagrant_config_vbox]
+and [VMware][vagrant_config_vmware] for more details.
+
+### <a name="config-gui"></a> GUI
+
+Allows GUI mode for each defined platform. Default is **nil**. Value is passed
+to the `config.vm.provider` but only for the VirtualBox and VMware-based
+providers.
+
+```ruby
+platforms:
+- name: ubuntu-14.04
+  driver:
+    gui: true
+```
+
+will generate a Vagrantfile configuration similar to:
+
+```ruby
+Vagrant.configure("2") do |config|
+  # ...
+
+  c.vm.provider :virtualbox do |p|
+    p.gui = true
+  end
+end
+```
+
+For more info about GUI vs. Headless mode please see [vagrant configuration docs][vagrant_config_vbox]
 
 ### <a name="config-dry-run"></a> dry\_run
 
@@ -239,7 +276,7 @@ The default is an empty Array, or `[]`. The example:
 
 ```ruby
 driver:
-  synced_folders: 
+  synced_folders:
     - ["data/%{instance_name}", "/opt/instance_data"]
     - ["/host_path", "/vm_path", "create: true, type: :nfs"]
 ```
@@ -292,7 +329,9 @@ set this value to `false`.
 
 The default will be computed from the name of the instance. For
 example, the instance was called "default-fuzz-9" will produce a default
-`vm_hostname` value of `"default-fuzz-9.vagrantup.com"`.
+`vm_hostname` value of `"default-fuzz-9.vagrantup.com"`. For Windows-based
+platforms, a default of `nil` is used to save on boot time and potential
+rebooting.
 
 ### <a name="config-ssh-key"></a> ssh\_key
 
@@ -305,6 +344,26 @@ location of the main Vagrantfile. If this value is nil, then the default
 insecure private key that ships with Vagrant will be used.
 
 The default value is unset, or `nil`.
+
+### <a name="config-vagrantfiles"></a> vagrantfiles
+
+An array of paths to other Vagrantfiles to be merged with the default one. The
+paths can be absolute or relative to the .kitchen.yml file.
+
+**Note:** the Vagrantfiles must have a .rb extension to satisfy Ruby's
+Kernel#require.
+
+```ruby
+driver:
+  vagrantfiles:
+    - VagrantfileA.rb
+    - /tmp/VagrantfileB.rb
+```
+
+### <a name="provision"></a> provision
+
+Set to true if you want to do the provision of vagrant in create.
+Usefull in case of you want to customize the OS in provision phase of vagrant
 
 ## <a name="development"></a> Development
 
@@ -336,7 +395,7 @@ Apache 2.0 (see [LICENSE][license])
 [repo]:             https://github.com/opscode/kitchen-vagrant
 [driver_usage]:     http://kitchen.ci/docs/getting-started/adding-platform
 
-[vagrant_dl]:               http://downloads.vagrantup.com/
+[vagrant_dl]:               http://www.vagrantup.com/downloads.html
 [vagrant_machine_settings]: http://docs.vagrantup.com/v2/vagrantfile/machine_settings.html
 [vagrant_networking]:       http://docs.vagrantup.com/v2/networking/basic_usage.html
 [virtualbox_dl]:            https://www.virtualbox.org/wiki/Downloads
@@ -345,6 +404,7 @@ Apache 2.0 (see [LICENSE][license])
 [vagrant_config_vbox]:      http://docs.vagrantup.com/v2/virtualbox/configuration.html
 [vagrant_config_vmware]:    http://docs.vagrantup.com/v2/vmware/configuration.html
 [vagrant_providers]:        http://docs.vagrantup.com/v2/providers/index.html
+[vagrant_versioning]:       https://docs.vagrantup.com/v2/boxes/versioning.html
 [vagrant_wrapper]:          https://github.com/org-binbab/gem-vagrant-wrapper
 [vagrant_wrapper_background]: https://github.com/org-binbab/gem-vagrant-wrapper#background---aka-the-vagrant-gem-enigma
 [vmware_plugin]:            http://www.vagrantup.com/vmware
